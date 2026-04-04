@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Test Run {{ run.run_at }} - {{ project.name }}{% endblock %}
+
+{% block content %}
+<section class="panel page-heading">
+    <div class="panel-header">
+        <h2 class="title">{{ project.name }} - Test Run at {{ run.run_at }}</h2>
+        <p class="subtle">File: <code>{{ run.filename }}</code></p>
+    </div>
+</section>
+
+<div class="summary-grid">
+    <section class="panel matrix-panel">
+        <div class="panel-header">
+            <h3 class="title">Results</h3>
+        </div>
+        <div class="panel-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>TestCase</th>
+                            <th>Status</th>
+                            <th>Time (s)</th>
+                            <th>Regression</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for result in results %}
+                        <tr class="result-{{ result.status.value }}">
+                            <td class="test-name">
+                                <a href="{{ url_for('test_view', project_id=project.id, test_id=result.test_id) }}">{{ result.test.name }}</a>
+                            </td>
+                            <td><span class="status-badge status-{{ result.status.value }}">{{ result.status.value }}</span></td>
+                            <td>{{ "%.3f"|format(result.time or 0) }}</td>
+                            <td>{% if result.regression %}<span class="count count-error">Regression</span>{% endif %}</td>
+                            <td>
+                                {% if result.status.value in ['failed', 'error'] %}
+                                <pre class="msg">{{ (result.message or '')[:1000] }}</pre>
+                                {% else %}
+                                <span class="muted">None</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <aside class="summary-side">
+        <section class="panel">
+            <div class="panel-header">
+                <h3 class="title">Summary</h3>
+            </div>
+            <div class="panel-body stats-grid">
+                {% for status, count in counts.items() %}
+                <div class="stat">
+                    <div class="stat-label">{{ status.capitalize() }}</div>
+                    <div class="stat-value">{{ count }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h3 class="title">Breakdown</h3>
+            </div>
+            <div class="panel-body">
+                <div class="chart-container">
+                    <canvas id="runPie"></canvas>
+                </div>
+            </div>
+        </section>
+    </aside>
+</div>
+
+<script>
+(function() {
+    const cssVars = getComputedStyle(document.documentElement);
+    const colorPassed = cssVars.getPropertyValue("--passed").trim();
+    const colorFailed = cssVars.getPropertyValue("--failed").trim();
+    const colorError = cssVars.getPropertyValue("--error").trim();
+    const colorSkipped = cssVars.getPropertyValue("--skipped").trim();
+
+    new Chart(document.getElementById("runPie"), {
+        type: "pie",
+        data: {
+            labels: ["Passed", "Failed", "Error", "Skipped"],
+            datasets: [{
+                data: [{{ counts.passed }}, {{ counts.failed }}, {{ counts.error }}, {{ counts.skipped }}],
+                backgroundColor: [colorPassed, colorFailed, colorError, colorSkipped],
+                borderWidth: 2,
+                borderColor: cssVars.getPropertyValue("--surface").trim()
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.2,
+            plugins: {
+                legend: {
+                    position: "bottom",
+                    labels: {
+                        color: cssVars.getPropertyValue("--text").trim(),
+                        padding: 18,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || "";
+                            const value = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percent}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

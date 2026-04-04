@@ -1,0 +1,10 @@
+*.tmp
+__pycache__
+
+# Data directory for databases and runtime files
+data/
+
+# Legacy database files
+*.db
+*.sqlite
+*.sqlite3

@@ -1,0 +1,104 @@
+<div class="filters">
+    <div class="filters-top">
+        <div class="filters-title">Filters</div>
+        <div class="filters-actions">
+            <button type="button" id="btnAddFilter">Add</button>
+            <button type="button" id="btnResetFilters">Reset</button>
+        </div>
+    </div>
+
+    <ul id="filterList" class="filter-list" aria-label="Filters">
+        {% for ftype, freg in ordered_filters %}
+        <li class="filter-item" draggable="true">
+            <span class="drag-handle" title="Drag to reorder">::</span>
+            <select class="filter-type" name="f_type">
+                <option value="include" {{ 'selected' if ftype == 'include' else '' }}>include</option>
+                <option value="exclude" {{ 'selected' if ftype == 'exclude' else '' }}>exclude</option>
+            </select>
+            <input class="filter-regex" name="f_regex" type="text" value="{{ freg }}" placeholder="regex">
+            <button type="button" class="btn-remove" title="Remove">Remove</button>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<script>
+(function() {
+    const list = document.getElementById("filterList");
+    const addBtn = document.getElementById("btnAddFilter");
+    const resetBtn = document.getElementById("btnResetFilters");
+    let dragEl = null;
+
+    function getDragAfterElement(container, y) {
+        const items = [...container.querySelectorAll(".filter-item:not(.dragging)")];
+        return items.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            }
+            return closest;
+        }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+    }
+
+    list.addEventListener("dragstart", (event) => {
+        dragEl = event.target.closest(".filter-item");
+        if (!dragEl) {
+            return;
+        }
+        dragEl.classList.add("dragging");
+        event.dataTransfer.effectAllowed = "move";
+    });
+
+    list.addEventListener("dragover", (event) => {
+        if (!dragEl) {
+            return;
+        }
+        event.preventDefault();
+        const after = getDragAfterElement(list, event.clientY);
+        if (after == null) {
+            list.appendChild(dragEl);
+        } else {
+            list.insertBefore(dragEl, after);
+        }
+    });
+
+    list.addEventListener("dragend", () => {
+        if (dragEl) {
+            dragEl.classList.remove("dragging");
+        }
+        dragEl = null;
+    });
+
+    addBtn.addEventListener("click", () => {
+        const item = document.createElement("li");
+        item.className = "filter-item";
+        item.draggable = true;
+        item.innerHTML = [
+            '<span class="drag-handle" title="Drag to reorder">::</span>',
+            '<select class="filter-type" name="f_type">',
+            '<option value="include" selected>include</option>',
+            '<option value="exclude">exclude</option>',
+            '</select>',
+            '<input class="filter-regex" name="f_regex" type="text" placeholder="regex">',
+            '<button type="button" class="btn-remove" title="Remove">Remove</button>'
+        ].join("");
+        list.appendChild(item);
+    });
+
+    resetBtn.addEventListener("click", () => {
+        list.innerHTML = "";
+    });
+
+    list.addEventListener("click", (event) => {
+        const button = event.target.closest(".btn-remove");
+        if (!button) {
+            return;
+        }
+        const item = button.closest(".filter-item");
+        if (item) {
+            item.remove();
+        }
+    });
+})();
+</script>

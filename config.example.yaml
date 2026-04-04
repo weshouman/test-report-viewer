@@ -1,0 +1,21 @@
+# Example configuration for the Flask JUnit dashboard
+# Save as config.yaml and start with:
+#   python app.py --config config.yaml --port 5100
+#
+# We can list multiple projects. Each project has a preset name and a directory to watch for JUnit XML files.
+projects:
+  - name: Example Project
+    identifier: example-project
+    out_dir: ./example_results/out
+    enabled: true
+
+# Number of past runs to show in the summary table
+summary_runs: 10
+
+# How often (in seconds) to scan project directories for new XML files
+scan_interval: 10
+
+# If both are provided, default_project_id takes precedence over default_project_name.
+# If default_project_name matches multiple DB rows, we pick the last one (highest id).
+default_project_id:
+default_project_identifier:

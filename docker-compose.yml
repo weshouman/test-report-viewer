@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  junit-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: junit-dashboard:local
+    container_name: junit-dashboard
+    environment:
+      - PORT=5100
+      - DATABASE_URL=sqlite:////data/junit_dashboard.db
+    ports:
+      - "${PORT}:5100"
+    volumes:
+      - dash_data:/data
+      - ./config.yaml:/config/config.yaml:ro
+      - ${RESULTS_DIR}:/workspace/results:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${PORT}/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  dash_data:
+

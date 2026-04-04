@@ -1,0 +1,17 @@
+# We can list multiple projects. Point out_dir to a path available *inside* the container.
+# If we bind-mounted ./results -> /workspace/results, use that container path here.
+projects:
+  - name: Markdown to Inspire
+    identifier: md2inspire
+    out_dir: /workspace/results/md2inspire
+    enabled: true
+  - name: Diff Normalizer
+    identifier: diff-normalizer
+    out_dir: /workspace/results/diff-normalizer
+    enabled: true
+
+summary_runs: 10
+scan_interval: 10
+
+default_project_identifier: "md2inspire"
+

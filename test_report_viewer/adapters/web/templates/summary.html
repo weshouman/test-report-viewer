@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - Test Report Viewer{% endblock %}
+
+{% block content %}
+{% set ftypes = ordered_filters | map(attribute=0) | list %}
+{% set fregs = ordered_filters | map(attribute=1) | list %}
+{% set trim_value = 1 if trim else 0 %}
+{% set latest_total = latest_counts.values() | sum %}
+
+<section class="panel page-heading">
+    <div class="panel-header">
+        <div class="split">
+            <div>
+                <h2 class="title">{{ project.name }}</h2>
+                <p class="subtle">Directory: <code>{{ project.out_dir }}</code></p>
+            </div>
+            {% if latest_total > 0 %}
+            {% set passed_percent = (latest_counts.passed / latest_total * 100) | round(1) %}
+            <span class="count count-{{ 'passed' if passed_percent >= 80 else ('error' if passed_percent >= 60 else 'failed') }}">{{ passed_percent }}% passed</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="panel-body pathbar">
+        <nav class="breadcrumbs">
+            <a href="{{ url_for('summary', project_id=project.id, f_type=ftypes, f_regex=fregs, trim=trim_value) }}">Root</a>
+            {% for label, path in breadcrumbs %}
+            <span class="sep">></span>
+            <a href="{{ url_for('summary', project_id=project.id, subpath=path, f_type=ftypes, f_regex=fregs, trim=trim_value) }}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+
+        <form method="get" class="filters-form" action="{{ url_for('summary', project_id=project.id, subpath=current_path.strip('/')) }}">
+            {% include "_filters.html" %}
+            <input type="hidden" name="trim" value="{{ trim_value }}">
+            <div class="filters-submit">
+                <button type="submit">Apply</button>
+                <a class="btn btn-secondary" href="{{ url_for('summary', project_id=project.id, subpath=current_path.strip('/')) }}">Clear</a>
+                <a class="btn btn-secondary"
+                   href="{{ url_for('summary', project_id=project.id, subpath=current_path.strip('/'), trim=(0 if trim else 1), f_type=ftypes, f_regex=fregs) }}">
+                    {{ 'Show full paths' if trim else 'Hide common prefix' }}
+                </a>
+            </div>
+        </form>
+    </div>
+</section>
+
+{% if runs|length == 0 %}
+<section class="panel">
+    <div class="panel-body">
+        <p>No test runs found yet. We will ingest XML files from <code>{{ project.out_dir }}</code> as they appear.</p>
+    </div>
+</section>
+{% else %}
+<div class="summary-grid">
+    <section class="panel matrix-panel">
+        <div class="panel-header">
+            <div class="split">
+                <h3 class="title">Past {{ runs|length }} Runs</h3>
+                <span class="muted">{{ matrix|length }} tests</span>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="table-scroll">
+                <table class="results-matrix">
+                    <thead>
+                        <tr>
+                            <th>Test</th>
+                            {% for run in runs %}
+                            <th title="{{ run.run_at }}">
+                                <a class="col-link" href="{{ url_for('testrun_view', project_id=project.id, run_id=run.id) }}">{{ loop.index }}</a>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for test, row in matrix %}
+                        <tr>
+                            <td class="test-name" title="{{ test.name }}" data-test-name="{{ test.name }}">
+                                {% set full = test.name | to_path %}
+                                {% set parts = full.strip('/').split('/') %}
+                                {% set start = prefix_parts|length if trim and parts|length > prefix_parts|length else 0 %}
+                                {% if trim and start >= parts|length %}
+                                    {% set start = parts|length - 1 %}
+                                {% endif %}
+                                <span class="path-line">
+                                    {% if start == 0 %}
+                                    <a class="dir-root" href="{{ url_for('summary', project_id=project.id, subpath='', f_type=ftypes, f_regex=fregs, trim=trim_value) }}">/</a>
+                                    <span class="seg-sep">/</span>
+                                    {% endif %}
+                                    {% set acc = namespace(path='') %}
+                                    {% for index in range(start, parts|length) %}
+                                        {% set segment = parts[index] %}
+                                        {% set acc.path = (acc.path + '/' + segment).lstrip('/') %}
+                                        {% if index < parts|length - 1 %}
+                                        <a href="{{ url_for('summary', project_id=project.id, subpath=acc.path, f_type=ftypes, f_regex=fregs, trim=trim_value) }}">{{ segment }}</a>
+                                        <span class="seg-sep">/</span>
+                                        {% else %}
+                                        <a class="leaf" href="{{ url_for('test_view', project_id=project.id, test_id=test.id) }}">{{ segment }}</a>
+                                        {% endif %}
+                                    {% endfor %}
+                                </span>
+                            </td>
+                            {% for result in row %}
+                            {% set cls = "status-unknown" %}
+                            {% set label = "" %}
+                            {% set time_label = "" %}
+                            {% if result %}
+                                {% if result.status.value == "passed" %}
+                                    {% set cls = "status-passed" %}
+                                    {% set label = "P" %}
+                                {% elif result.status.value == "failed" %}
+                                    {% set cls = "status-failed" %}
+                                    {% set label = "F" %}
+                                {% elif result.status.value == "error" %}
+                                    {% set cls = "status-error" %}
+                                    {% set label = "E" %}
+                                {% elif result.status.value == "skipped" %}
+                                    {% set cls = "status-skipped" %}
+                                    {% set label = "S" %}
+                                {% endif %}
+                                {% if result.regression %}
+                                    {% set cls = cls + " status-regression" %}
+                                {% endif %}
+                                {% set time_label = "%.2fs"|format(result.time or 0.0) %}
+                            {% endif %}
+                            <td class="status-cell {{ cls }}">
+                                {% if result %}
+                                <a title="{{ result.status.value }} {{ time_label }}" href="{{ url_for('test_view', project_id=project.id, test_id=result.test_id) }}">
+                                    <span class="mini">{% if result.regression %}R {% endif %}{{ label }}</span>
+                                    <span class="mini">{{ time_label }}</span>
+                                </a>
+                                {% else %}
+                                &nbsp;
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="legend">
+                <span class="status-badge status-passed">P</span> Passed
+                <span class="status-badge status-failed">F</span> Failed
+                <span class="status-badge status-error">E</span> Error
+                <span class="status-badge status-skipped">S</span> Skipped
+                <span class="legend-note">R failed after passing</span>
+            </p>
+        </div>
+    </section>
+
+    <aside class="summary-side">
+        <section class="panel">
+            <div class="panel-header">
+                <h3 class="title">Latest Run Stats</h3>
+            </div>
+            <div class="panel-body stats-grid">
+                {% for status, count in latest_counts.items() %}
+                <div class="stat">
+                    <div class="stat-label">{{ status.capitalize() }}</div>
+                    <div class="stat-value">{{ count }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h3 class="title">Latest Run Breakdown</h3>
+            </div>
+            <div class="panel-body">
+                <div class="chart-container">
+                    <canvas id="latestPie"></canvas>
+                </div>
+            </div>
+        </section>
+    </aside>
+</div>
+
+<section class="panel danger-panel">
+    <div class="panel-body">
+        <form method="POST"
+              action="{{ url_for('delete_project', project_id=project.id) }}"
+              onsubmit="return confirm('Delete this project and all its data? This cannot be undone.');">
+            <button type="submit" class="btn-danger">Delete Project</button>
+        </form>
+    </div>
+</section>
+
+<script>
+(function() {
+    const cssVars = getComputedStyle(document.documentElement);
+    const colorPassed = cssVars.getPropertyValue("--passed").trim();
+    const colorFailed = cssVars.getPropertyValue("--failed").trim();
+    const colorError = cssVars.getPropertyValue("--error").trim();
+    const colorSkipped = cssVars.getPropertyValue("--skipped").trim();
+
+    new Chart(document.getElementById("latestPie"), {
+        type: "pie",
+        data: {
+            labels: ["Passed", "Failed", "Error", "Skipped"],
+            datasets: [{
+                data: [{{ latest_counts.passed }}, {{ latest_counts.failed }}, {{ latest_counts.error }}, {{ latest_counts.skipped }}],
+                backgroundColor: [colorPassed, colorFailed, colorError, colorSkipped],
+                borderWidth: 2,
+                borderColor: cssVars.getPropertyValue("--surface").trim()
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.2,
+            plugins: {
+                legend: {
+                    position: "bottom",
+                    labels: {
+                        color: cssVars.getPropertyValue("--text").trim(),
+                        padding: 18,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || "";
+                            const value = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percent}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}{{ test.name }} - {{ project.name }}{% endblock %}
+
+{% block content %}
+<section class="panel page-heading">
+    <div class="panel-header">
+        <h2 class="title">{{ project.name }} - {{ test.name }}</h2>
+        <p class="subtle">Class: {{ test.classname or 'N/A' }}</p>
+    </div>
+    {% if breadcrumbs %}
+    <div class="panel-body">
+        <nav class="breadcrumbs">
+            <a href="{{ url_for('summary', project_id=project.id) }}">Root</a>
+            {% for label, path in breadcrumbs %}
+            <span class="sep">></span>
+            <a href="{{ url_for('summary', project_id=project.id, subpath=path) }}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+    </div>
+    {% endif %}
+</section>
+
+<div class="summary-grid">
+    <section class="panel">
+        <div class="panel-header">
+            <h3 class="title">History</h3>
+        </div>
+        <div class="panel-body">
+            <div class="chart-container chart-wide">
+                <canvas id="historyChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <aside class="summary-side">
+        <section class="panel">
+            <div class="panel-header">
+                <h3 class="title">Totals</h3>
+            </div>
+            <div class="panel-body stats-grid">
+                {% for status, count in counts.items() %}
+                <div class="stat">
+                    <div class="stat-label">{{ status.capitalize() }}</div>
+                    <div class="stat-value">{{ count }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h3 class="title">Breakdown</h3>
+            </div>
+            <div class="panel-body">
+                <div class="chart-container">
+                    <canvas id="testPie"></canvas>
+                </div>
+            </div>
+        </section>
+    </aside>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3 class="title">All Results</h3>
+    </div>
+    <div class="panel-body">
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Run At</th>
+                        <th>Status</th>
+                        <th>Time (s)</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in results|reverse %}
+                    <tr class="result-{{ result.status.value }}">
+                        <td><a href="{{ url_for('testrun_view', project_id=project.id, run_id=result.testrun.id) }}">{{ result.testrun.run_at }}</a></td>
+                        <td><span class="status-badge status-{{ result.status.value }}">{{ result.status.value }}</span></td>
+                        <td>{{ "%.3f"|format(result.time or 0) }}</td>
+                        <td><pre class="msg">{{ (result.message or '')[:500] }}</pre></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<script>
+(function() {
+    const cssVars = getComputedStyle(document.documentElement);
+    const colorPassed = cssVars.getPropertyValue("--passed").trim();
+    const colorFailed = cssVars.getPropertyValue("--failed").trim();
+    const colorError = cssVars.getPropertyValue("--error").trim();
+    const colorSkipped = cssVars.getPropertyValue("--skipped").trim();
+    const textColor = cssVars.getPropertyValue("--text").trim();
+    const dimColor = cssVars.getPropertyValue("--text-dim").trim();
+
+    new Chart(document.getElementById("historyChart"), {
+        type: "line",
+        data: {
+            datasets: [{
+                label: "Status over time",
+                data: {{ chart_points|tojson }},
+                tension: 0.2,
+                borderColor: colorPassed,
+                backgroundColor: "rgba(63, 191, 127, 0.16)",
+                pointRadius: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 2,
+            parsing: false,
+            scales: {
+                x: {
+                    type: "category",
+                    title: { display: true, text: "Test Run", color: textColor },
+                    ticks: { color: dimColor },
+                    grid: { color: "rgba(255, 255, 255, 0.08)" }
+                },
+                y: {
+                    type: "category",
+                    labels: ["Error", "Failed", "Skipped", "Passed"],
+                    title: { display: true, text: "Status", color: textColor },
+                    ticks: { color: dimColor },
+                    grid: { color: "rgba(255, 255, 255, 0.08)" }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("testPie"), {
+        type: "pie",
+        data: {
+            labels: ["Passed", "Failed", "Error", "Skipped"],
+            datasets: [{
+                data: [{{ counts.passed }}, {{ counts.failed }}, {{ counts.error }}, {{ counts.skipped }}],
+                backgroundColor: [colorPassed, colorFailed, colorError, colorSkipped],
+                borderWidth: 2,
+                borderColor: cssVars.getPropertyValue("--surface").trim()
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.2,
+            plugins: {
+                legend: {
+                    position: "bottom",
+                    labels: {
+                        color: textColor,
+                        padding: 18,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || "";
+                            const value = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percent}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

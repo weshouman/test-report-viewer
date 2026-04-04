@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Test Report Viewer{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div>
+            <h1>Test Report Viewer</h1>
+            <p>JUnit XML dashboard</p>
+        </div>
+        {% if project %}
+        <nav class="header-nav">
+            <a href="{{ url_for('summary', project_id=project.id) }}">Project Home</a>
+        </nav>
+        {% endif %}
+    </header>
+
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-title">Projects</div>
+            {% if project_list %}
+            <form class="proj-order" method="get" action="">
+                <label><input type="radio" name="order" value="name" {{ 'checked' if order_mode == 'name' else '' }} onchange="this.form.submit()"> Name</label>
+                <label><input type="radio" name="order" value="date" {{ 'checked' if order_mode == 'date' else '' }} onchange="this.form.submit()"> Last run</label>
+                <label><input type="radio" name="order" value="id" {{ 'checked' if order_mode == 'id' else '' }} onchange="this.form.submit()"> ID</label>
+            </form>
+            <ul class="sidebar-list">
+                {% for sidebar_project, tooltip in project_list %}
+                <li>
+                    <a class="sidebar-link {{ 'active' if project and sidebar_project.id == project.id else '' }}"
+                       title="{{ tooltip }}"
+                       href="{{ url_for('summary', project_id=sidebar_project.id, order=order_mode) }}">
+                        {{ sidebar_project.name }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">No projects configured.</p>
+            {% endif %}
+        </aside>
+
+        <main class="content">
+            {% block content %}
+            {% if content %}
+            <section class="panel">
+                <div class="panel-body">{{ content }}</div>
+            </section>
+            {% endif %}
+            {% endblock %}
+        </main>
+    </div>
+</body>
+</html>
